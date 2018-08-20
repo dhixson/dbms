@@ -29,12 +29,18 @@ typedef enum PrepareResult_t PrepareResult;
 enum StatementType_t { STATEMENT_INSERT, STATEMENT_SELECT };
 typedef enum StatementType_t StatementType;
 
-const uint32_t COLUMN_USERNAME_SIZE = 32;
-const uint32_t COLUMN_EMAIL_SIZE = 255;
+const uint32_t COLUMN_STB_SIZE = 32;
+const uint32_t COLUMN_TITLE_SIZE = 255;
+const uint32_t COLUMN_PROVIDER_SIZE = 255;
+const uint32_t COLUMN_DATE_SIZE = 11;
+const uint32_t COLUMN_TIME_SIZE = 5;
 struct Row_t {
-  uint32_t id;
-  char username[COLUMN_USERNAME_SIZE];
-  char email[COLUMN_EMAIL_SIZE];
+  char stb[COLUMN_STB_SIZE];
+  char title[COLUMN_TITLE_SIZE];
+  char provider[COLUMN_PROVIDER_SIZE];
+  char date[COLUMN_DATE_SIZE];
+  float rev;
+  char time[COLUMN_TIME_SIZE];
 };
 typedef struct Row_t Row;
 
@@ -44,13 +50,19 @@ struct Statement_t {
 };
 typedef struct Statement_t Statement;
 
-const uint32_t ID_SIZE = sizeof(((Row*)0)->id);
-const uint32_t USERNAME_SIZE = sizeof(((Row*)0)->username);
-const uint32_t EMAIL_SIZE = sizeof(((Row*)0)->email);
-const uint32_t ID_OFFSET = 0;
-const uint32_t USERNAME_OFFSET = ID_OFFSET + ID_SIZE;
-const uint32_t EMAIL_OFFSET = USERNAME_OFFSET + USERNAME_SIZE;
-const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
+const uint32_t STB_SIZE = sizeof(((Row*)0)->stb);
+const uint32_t TITLE_SIZE = sizeof(((Row*)0)->title);
+const uint32_t PROVIDER_SIZE = sizeof(((Row*)0)->provider);
+const uint32_t DATE_SIZE = sizeof(((Row*)0)->date);
+const uint32_t REV_SIZE = sizeof(((Row*)0)->rev);
+const uint32_t TIME_SIZE = sizeof(((Row*)0)->time);
+const uint32_t STB_OFFSET = 0;
+const uint32_t TITLE_OFFSET = STB_OFFSET + STB_SIZE;
+const uint32_t PROVIDER_OFFSET = TITLE_OFFSET + TITLE_SIZE;
+const uint32_t DATE_OFFSET = PROVIDER_OFFSET + PROVIDER_SIZE;
+const uint32_t REV_OFFSET = DATE_OFFSET + DATE_SIZE;
+const uint32_t TIME_OFFSET = REV_OFFSET + REV_SIZE;
+const uint32_t ROW_SIZE = STB_SIZE + TITLE_SIZE + PROVIDER_SIZE + DATE_SIZE + REV_SIZE + TIME_SIZE;
 
 const uint32_t PAGE_SIZE = 4096;
 const uint32_t TABLE_MAX_PAGES = 100;
@@ -64,19 +76,25 @@ struct Table_t {
 typedef struct Table_t Table;
 
 void print_row(Row* row) {
-  printf("(%d, %s, %s)\n", row->id, row->username, row->email);
+  printf("(%s, %s, %s, %s, %f, %s)\n", row->stb, row->title, row->provider, row->date, row->rev, row->time);
 }
 
 void serialize_row(Row* source, void* destination) {
-  memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
-  memcpy(destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
-  memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+  memcpy(destination + STB_OFFSET, &(source->stb), STB_SIZE);
+  memcpy(destination + TITLE_OFFSET, &(source->title), TITLE_SIZE);
+  memcpy(destination + PROVIDER_OFFSET, &(source->provider), PROVIDER_SIZE);
+  memcpy(destination + DATE_OFFSET, &(source->date), DATE_SIZE);
+  memcpy(destination + REV_OFFSET, &(source->rev), REV_SIZE);
+  memcpy(destination + TIME_OFFSET, &(source->time), TIME_SIZE);
 }
 
 void deserialize_row(void* source, Row* destination) {
-  memcpy(&(destination->id), source + ID_OFFSET, ID_SIZE);
-  memcpy(&(destination->username), source + USERNAME_OFFSET, USERNAME_SIZE);
-  memcpy(&(destination->email), source + EMAIL_OFFSET, EMAIL_SIZE);
+  memcpy(&(destination->stb), source + STB_OFFSET, STB_SIZE);
+  memcpy(&(destination->title), source + TITLE_OFFSET, TITLE_SIZE);
+  memcpy(&(destination->provider), source + PROVIDER_OFFSET, PROVIDER_SIZE);
+  memcpy(&(destination->date), source + DATE_OFFSET, DATE_SIZE);
+  memcpy(&(destination->rev), source + REV_OFFSET, REV_SIZE);
+  memcpy(&(destination->time), source + TIME_OFFSET, TIME_SIZE);
 }
 
 void* row_slot(Table* table, uint32_t row_num) {
@@ -136,8 +154,10 @@ PrepareResult prepare_statement(InputBuffer* input_buffer,
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
     statement->type = STATEMENT_INSERT;
     int args_assigned = sscanf(
-        input_buffer->buffer, "insert %d %s %s", &(statement->row_to_insert.id),
-        statement->row_to_insert.username, statement->row_to_insert.email);
+        input_buffer->buffer, "insert %s %s %s %s %f %s", statement->row_to_insert.stb,
+        statement->row_to_insert.title, statement->row_to_insert.provider,
+        statement->row_to_insert.date, &statement->row_to_insert.rev,
+        statement->row_to_insert.time);
     if (args_assigned < 3) {
       return PREPARE_SYNTAX_ERROR;
     }
