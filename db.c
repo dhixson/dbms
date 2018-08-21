@@ -21,6 +21,8 @@ typedef enum MetaCommandResult_t MetaCommandResult;
 
 enum PrepareResult_t {
   PREPARE_SUCCESS,
+  PREPARE_NEGATIVE_REV,
+  PREPARE_STRING_TO_LONG,
   PREPARE_SYNTAX_ERROR,
   PREPARE_UNRECOGNIZED_STATEMENT
 };
@@ -32,15 +34,15 @@ typedef enum StatementType_t StatementType;
 const uint32_t COLUMN_STB_SIZE = 32;
 const uint32_t COLUMN_TITLE_SIZE = 255;
 const uint32_t COLUMN_PROVIDER_SIZE = 255;
-const uint32_t COLUMN_DATE_SIZE = 11;
-const uint32_t COLUMN_TIME_SIZE = 5;
+const uint32_t COLUMN_DATE_SIZE = 10;
+const uint32_t COLUMN_TIME_SIZE = 4;
 struct Row_t {
-  char stb[COLUMN_STB_SIZE];
-  char title[COLUMN_TITLE_SIZE];
-  char provider[COLUMN_PROVIDER_SIZE];
-  char date[COLUMN_DATE_SIZE];
+  char stb[COLUMN_STB_SIZE + 1];
+  char title[COLUMN_TITLE_SIZE + 1];
+  char provider[COLUMN_PROVIDER_SIZE + 1];
+  char date[COLUMN_DATE_SIZE + 1];
   float rev;
-  char time[COLUMN_TIME_SIZE];
+  char time[COLUMN_TIME_SIZE + 1];
 };
 typedef struct Row_t Row;
 
@@ -149,19 +151,49 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
   }
 }
 
+PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
+    statement->type = STATEMENT_INSERT;
+    char* keyword = strtok(input_buffer->buffer, " ");
+    char* stb = strtok(NULL, " ");
+    char* title = strtok(NULL, " ");
+    char* provider = strtok(NULL, " ");
+    char* date = strtok(NULL, " ");
+    char* rev_string = strtok(NULL, " ");
+    char* time = strtok(NULL, " ");
+
+    if (stb == NULL || title == NULL || provider == NULL || date == NULL ||
+            rev_string == NULL || time == NULL) {
+        return PREPARE_SYNTAX_ERROR;
+    }
+
+    float rev = atof(rev_string);
+    if (rev < 0) {
+        return PREPARE_NEGATIVE_REV;
+    }
+    if (
+            strlen(stb) > COLUMN_STB_SIZE ||
+            strlen(title) > COLUMN_TITLE_SIZE ||
+            strlen(provider) > COLUMN_PROVIDER_SIZE ||
+            strlen(date) > COLUMN_DATE_SIZE ||
+            strlen(time) > COLUMN_TIME_SIZE
+       ) {
+        return PREPARE_STRING_TO_LONG;
+    }
+
+    strcpy(statement->row_to_insert.stb, stb);
+    strcpy(statement->row_to_insert.title, title);
+    strcpy(statement->row_to_insert.provider, provider);
+    strcpy(statement->row_to_insert.date, date);
+    statement->row_to_insert.rev = rev;
+    strcpy(statement->row_to_insert.time, time);
+
+    return PREPARE_SUCCESS;
+}
+
 PrepareResult prepare_statement(InputBuffer* input_buffer,
                                 Statement* statement) {
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
-    statement->type = STATEMENT_INSERT;
-    int args_assigned = sscanf(
-        input_buffer->buffer, "insert %s %s %s %s %f %s", statement->row_to_insert.stb,
-        statement->row_to_insert.title, statement->row_to_insert.provider,
-        statement->row_to_insert.date, &statement->row_to_insert.rev,
-        statement->row_to_insert.time);
-    if (args_assigned < 3) {
-      return PREPARE_SYNTAX_ERROR;
-    }
-    return PREPARE_SUCCESS;
+    return prepare_insert(input_buffer, statement);
   }
   if (strcmp(input_buffer->buffer, "select") == 0) {
     statement->type = STATEMENT_SELECT;
@@ -223,6 +255,12 @@ int main(int argc, char* argv[]) {
     switch (prepare_statement(input_buffer, &statement)) {
       case (PREPARE_SUCCESS):
         break;
+      case (PREPARE_NEGATIVE_REV):
+        printf("REV must be positive.\n");
+        continue;
+      case (PREPARE_STRING_TO_LONG):
+        printf("String is too long.\n");
+        continue;
       case (PREPARE_SYNTAX_ERROR):
         printf("Syntax error. Could not parse statement.\n");
         continue;
