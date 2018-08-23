@@ -138,7 +138,7 @@ void* leaf_node_cell(void* node, uint32_t cell_num) {
     return (char *)node + LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE;
 }
 
-uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
+char* leaf_node_key(void* node, uint32_t cell_num) {
     return leaf_node_cell(node, cell_num) ;
 }
 
@@ -160,8 +160,8 @@ void print_leaf_node(void* node) {
     uint32_t num_cells = *leaf_node_num_cells(node);
     printf("leaf (size %d)\n", num_cells);
     for (uint32_t i = 0; i < num_cells; i++) {
-        uint32_t key = *leaf_node_key(node, i);
-        printf(" - %d : %d\n", i, key);
+        char* key = leaf_node_key(node, i);
+        printf(" - %d : %s\n", i, key);
     }
 }
 
@@ -448,7 +448,7 @@ PrepareResult prepare_statement(InputBuffer* input_buffer,
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
-void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
+void leaf_node_insert(Cursor* cursor, char * key, Row* value) {
     void* node = get_page(cursor->table->pager, cursor->page_num);
 
     uint32_t num_cells = *leaf_node_num_cells(node);
@@ -464,7 +464,8 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     }
 
     *(leaf_node_num_cells(node)) += 1;
-    *(leaf_node_key(node, cursor->cell_num)) = key;
+    //*(leaf_node_key(node, cursor->cell_num)) = *key;
+    strcpy(leaf_node_key(node, cursor->cell_num), key);
     serialize_row(value, leaf_node_value(node, cursor->cell_num));
 }
 
@@ -477,8 +478,12 @@ ExecuteResult execute_insert(Statement* statement, Table* table) {
 
   Row* row_to_insert = &(statement->row_to_insert);
   Cursor* cursor = table_end(table);
-
-  leaf_node_insert(cursor, row_to_insert->id, row_to_insert);
+  char* stb = row_to_insert->stb;
+  char* title = row_to_insert->title;
+  char* date = row_to_insert->date;
+  char key[LEAF_NODE_KEY_SIZE];
+  snprintf(key, sizeof(key), "%s%s%s", stb, title, date);
+  leaf_node_insert(cursor, key, row_to_insert);
 
   free(cursor);
 
